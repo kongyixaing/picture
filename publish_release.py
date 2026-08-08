@@ -144,33 +144,42 @@ def create_release(version, token):
     return None
 
 
+UPLOAD_API = 'https://uploads.github.com'
+
+
 def upload_asset(release_id, file_path, token):
-    """上传文件到 Release"""
+    """上传文件到 Release
+    
+    直接使用 release_id 构造上传 URL，避免重新查询 releases 列表。
+    """
     filename = os.path.basename(file_path)
     size = os.path.getsize(file_path)
     
     print(f'  📤 上传: {filename} ({size/1024/1024:.1f} MB)')
     
-    # 获取上传 URL
-    releases = github_request('GET', f'/repos/{REPO}/releases', token)
-    upload_url = None
-    if releases:
-        for r in releases:
-            if r['id'] == release_id:
-                upload_url = r.get('upload_url', '').replace('{?name,label}', '')
+    # 检查是否已存在同名 asset，如存在先删除
+    existing = github_request('GET', f'/repos/{REPO}/releases/{release_id}', token)
+    if existing and existing.get('assets'):
+        for asset in existing['assets']:
+            if asset['name'] == filename:
+                print(f'  🗑️  删除已存在的旧文件: {filename}')
+                github_request('DELETE', f'/repos/{REPO}/releases/assets/{asset["id"]}', token)
                 break
     
-    if not upload_url:
-        print('  ❌ 无法获取上传 URL')
-        return False
+    # 直接构造上传 URL
+    upload_url = f'{UPLOAD_API}/repos/{REPO}/releases/{release_id}/assets?name={filename}'
     
     # 读取文件
     with open(file_path, 'rb') as f:
         content = f.read()
     
     # 上传文件
-    mime_type = 'application/zip' if file_path.endswith('.zip') else 'application/gzip'
-    url = f'{upload_url}?name={filename}'
+    if file_path.endswith('.zip'):
+        mime_type = 'application/zip'
+    elif file_path.endswith('.tar.gz'):
+        mime_type = 'application/gzip'
+    else:
+        mime_type = 'application/octet-stream'
     
     hdrs = {
         'Authorization': f'token {token}',
@@ -179,36 +188,43 @@ def upload_asset(release_id, file_path, token):
         'User-Agent': 'PictureAndVideos-Publisher',
     }
     
-    req = Request(url, data=content, headers=hdrs, method='POST')
+    req = Request(upload_url, data=content, headers=hdrs, method='POST')
     
     try:
         with urlopen(req) as resp:
             result = json.loads(resp.read().decode('utf-8'))
             print(f'  ✅ 上传成功!')
+            if result.get('browser_download_url'):
+                print(f'  🔗 {result["browser_download_url"]}')
             return True
     except HTTPError as e:
-        print(f'  ❌ 上传失败: {e.code}')
+        error_body = e.read().decode('utf-8', errors='ignore')
+        print(f'  ❌ 上传失败: {e.code} - {error_body[:200]}')
         return False
 
 
-def find_build_artifacts():
-    """查找构建产物"""
+def find_build_artifacts(version=None):
+    """查找构建产物
+    
+    只返回 release/ 目录下与版本号匹配的压缩包，
+    避免上传无关的 exe 或 ffmpeg 文件。
+    """
     artifacts = []
     release_dir = 'release'
-    dist_dir = 'dist'
     
-    # 查找 release 目录下的压缩包
-    if os.path.exists(release_dir):
-        for f in os.listdir(release_dir):
-            if f.endswith(('.zip', '.tar.gz')):
-                artifacts.append(os.path.join(release_dir, f))
+    if not os.path.exists(release_dir):
+        return artifacts
     
-    # 查找 dist 目录
-    if os.path.exists(dist_dir):
-        for root, dirs, files in os.walk(dist_dir):
-            for f in files:
-                if f.endswith('.exe'):
-                    artifacts.append(os.path.join(root, f))
+    for f in sorted(os.listdir(release_dir)):
+        # 只接受 .zip 和 .tar.gz 压缩包
+        if not f.endswith(('.zip', '.tar.gz')):
+            continue
+        # 如果指定了版本号，只返回匹配的文件
+        if version:
+            tag = f'v{version}'
+            if tag not in f:
+                continue
+        artifacts.append(os.path.join(release_dir, f))
     
     return artifacts
 
@@ -321,8 +337,8 @@ def main():
         print('❌ Token 无效')
         sys.exit(1)
     
-    # 查找构建产物
-    artifacts = find_build_artifacts()
+    # 查找构建产物（只返回匹配当前版本的文件）
+    artifacts = find_build_artifacts(version)
     print(f'\n📁 找到 {len(artifacts)} 个构建产物:')
     for a in artifacts:
         size = os.path.getsize(a) / 1024 / 1024
