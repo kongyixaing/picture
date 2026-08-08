@@ -33,6 +33,7 @@ data/crypto_key.key
 
 # 打包相关
 build/pic_app/
+release/
 
 # 配置文件（每个用户本地配置）
 config.json
