@@ -65,7 +65,7 @@ jobs:
       - name: Install required system packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgl1-mesa-glx libglib2.0-0
+          sudo apt-get install -y libgl1 libglib2.0-0 libsm6 libxrender1 libxext6
           
       - name: Build executable
         run: |
@@ -113,6 +113,7 @@ jobs:
   upload-assets:
     needs: [build-windows, build-linux, build-macos]
     runs-on: ubuntu-latest
+    if: always()
     steps:
       - uses: actions/download-artifact@v4
         with:
