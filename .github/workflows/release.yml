@@ -4,9 +4,18 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号 (如 0.0.1)'
+        required: true
+        default: '0.0.1'
 
 permissions:
   contents: write
+
+env:
+  VERSION: ${{ github.event.inputs.version || github.ref_name }}
 
 jobs:
   build-windows:
@@ -30,13 +39,13 @@ jobs:
           
       - name: Create archive
         run: |
-          Compress-Archive -Path dist/PictureAndVideos -DestinationPath PictureAndVideos-${{ github.ref_name }}-windows-x64.zip
+          Compress-Archive -Path dist/PictureAndVideos -DestinationPath PictureAndVideos-${{ env.VERSION }}-windows-x64.zip
           
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: windows-x64
-          path: PictureAndVideos-${{ github.ref_name }}-windows-x64.zip
+          path: PictureAndVideos-${{ env.VERSION }}-windows-x64.zip
           
   build-linux:
     runs-on: ubuntu-latest
@@ -64,13 +73,13 @@ jobs:
           
       - name: Create archive
         run: |
-          tar -czf PictureAndVideos-${{ github.ref_name }}-linux-x64.tar.gz -C dist PictureAndVideos
+          tar -czf PictureAndVideos-${{ env.VERSION }}-linux-x64.tar.gz -C dist PictureAndVideos
           
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: linux-x64
-          path: PictureAndVideos-${{ github.ref_name }}-linux-x64.tar.gz
+          path: PictureAndVideos-${{ env.VERSION }}-linux-x64.tar.gz
           
   build-macos:
     runs-on: macos-latest
@@ -93,15 +102,15 @@ jobs:
           
       - name: Create archive
         run: |
-          tar -czf PictureAndVideos-${{ github.ref_name }}-macos-arm64.tar.gz -C dist PictureAndVideos
+          tar -czf PictureAndVideos-${{ env.VERSION }}-macos-arm64.tar.gz -C dist PictureAndVideos
           
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: macos-arm64
-          path: PictureAndVideos-${{ github.ref_name }}-macos-arm64.tar.gz
+          path: PictureAndVideos-${{ env.VERSION }}-macos-arm64.tar.gz
           
-  create-release:
+  upload-assets:
     needs: [build-windows, build-linux, build-macos]
     runs-on: ubuntu-latest
     steps:
@@ -115,37 +124,41 @@ jobs:
         run: |
           ls -la artifacts/
           
-      - name: Generate release notes
-        run: |
-          echo "## Picture & Videos ${{ github.ref_name }}" > RELEASE_NOTES.md
-          echo "" >> RELEASE_NOTES.md
-          echo "### 下载链接" >> RELEASE_NOTES.md
-          echo "" >> RELEASE_NOTES.md
-          echo "| 平台 | 下载 |" >> RELEASE_NOTES.md
-          echo "|------|------|" >> RELEASE_NOTES.md
-          echo "| Windows x64 | [下载](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/PictureAndVideos-${{ github.ref_name }}-windows-x64.zip) |" >> RELEASE_NOTES.md
-          echo "| Linux x64 | [下载](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/PictureAndVideos-${{ github.ref_name }}-linux-x64.tar.gz) |" >> RELEASE_NOTES.md
-          echo "| macOS Apple Silicon | [下载](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/PictureAndVideos-${{ github.ref_name }}-macos-arm64.tar.gz) |" >> RELEASE_NOTES.md
-          echo "" >> RELEASE_NOTES.md
-          echo "### 系统要求" >> RELEASE_NOTES.md
-          echo "" >> RELEASE_NOTES.md
-          echo "- **Windows**: Windows 7/8/10/11 (64位), 至少 2GB 内存" >> RELEASE_NOTES.md
-          echo "- **Linux**: Ubuntu 18.04+/CentOS 7+/Debian 10+ (64位), 至少 2GB 内存" >> RELEASE_NOTES.md
-          echo "- **macOS**: macOS 10.14+, Apple Silicon / Intel, 至少 2GB 内存" >> RELEASE_NOTES.md
-          echo "" >> RELEASE_NOTES.md
-          echo "### 主要功能" >> RELEASE_NOTES.md
-          echo "" >> RELEASE_NOTES.md
-          echo "- 🖼️ 图片分享" >> RELEASE_NOTES.md
-          echo "- 🎬 视频分享与转码" >> RELEASE_NOTES.md
-          echo "- 💬 即时通讯（私聊/群聊）" >> RELEASE_NOTES.md
-          echo "- 👥 好友系统" >> RELEASE_NOTES.md
-          echo "- 🏛️ 小镇地图（可配置开关）" >> RELEASE_NOTES.md
-          echo "- ✅ 内容审核和用户管理" >> RELEASE_NOTES.md
-          
-      - name: Create Release
+      - name: Upload assets to existing Release
         uses: softprops/action-gh-release@v2
         with:
-          body_path: RELEASE_NOTES.md
+          tag_name: ${{ env.VERSION }}
           files: |
             artifacts/*.zip
             artifacts/*.tar.gz
+          body: |
+            ## Picture & Videos v${{ env.VERSION }}
+            
+            ### 📥 下载链接
+            
+            | 平台 | 文件 |
+            |------|------|
+            | Windows x64 | PictureAndVideos-${{ env.VERSION }}-windows-x64.zip |
+            | Linux x64 | PictureAndVideos-${{ env.VERSION }}-linux-x64.tar.gz |
+            | macOS ARM64 | PictureAndVideos-${{ env.VERSION }}-macos-arm64.tar.gz |
+            
+            ### 💻 系统要求
+            - **Windows**: Windows 7/8/10/11 (64位), 至少 2GB 内存
+            - **Linux**: Ubuntu 18.04+/CentOS 7+/Debian 10+ (64位), 至少 2GB 内存
+            - **macOS**: macOS 10.14+, Apple Silicon / Intel, 至少 2GB 内存
+            
+            ### ✨ 主要功能
+            - 🖼️ 图片分享
+            - 🎬 视频分享与转码
+            - 💬 即时通讯（私聊/群聊）
+            - 👥 好友系统
+            - 🏛️ 小镇地图（可配置开关）
+            - ✅ 内容审核和用户管理
+            
+            ### 🚀 快速开始
+            1. 下载适合您系统的安装包
+            2. 解压到任意目录
+            3. Windows: 双击 PictureAndVideos.exe
+            4. Linux/macOS: `chmod +x PictureAndVideos && ./PictureAndVideos`
+            5. 访问 http://localhost:5001
+            6. 默认账户: admin / admin123
