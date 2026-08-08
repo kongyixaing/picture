@@ -1,0 +1,52 @@
+{% extends 'pic_base.html' %}
+{% block title %}个人中心{% endblock %}
+{% block content %}
+<div class="profile-page">
+    <h1>个人中心</h1>
+    <div class="profile-info">
+        <div class="profile-row">
+            <span class="label">用户名:</span>
+            <span class="value">{{ user.username }}</span>
+        </div>
+        <div class="profile-row">
+            <span class="label">UID:</span>
+            <span class="value">{{ user.uid }}</span>
+        </div>
+        <div class="profile-row">
+            <span class="label">角色:</span>
+            <span class="value role-badge role-{{ user.role }}">
+                {% if user.role == 'admin' %}超级管理员
+                {% elif user.role == 'manager' %}管理员
+                {% else %}普通用户{% endif %}
+            </span>
+        </div>
+        <div class="profile-row">
+            <span class="label">状态:</span>
+            <span class="value {% if user.status == 'banned' %}banned{% endif %}">
+                {% if user.status == 'banned' %}已封禁{% else %}正常{% endif %}
+            </span>
+        </div>
+        <div class="profile-row">
+            <span class="label">上传图片数:</span>
+            <span class="value">{{ user.uploaded_pictures }}</span>
+        </div>
+        <div class="profile-row">
+            <span class="label">上传视频数:</span>
+            <span class="value">{{ user.uploaded_videos }}</span>
+        </div>
+        <div class="profile-row">
+            <span class="label">好友数:</span>
+            <span class="value">{{ user.friends|length }}</span>
+        </div>
+        <div class="profile-row">
+            <span class="label">注册时间:</span>
+            <span class="value">{{ user.created_at|int|datetimeformat }}</span>
+        </div>
+    </div>
+    <div class="profile-actions">
+        <a href="{{ url_for('pic_change_password') }}" class="btn btn-primary">修改密码</a>
+        <a href="{{ url_for('pic_friends') }}" class="btn btn-secondary">我的好友</a>
+        <a href="{{ url_for('pic_groups') }}" class="btn btn-secondary">我的群聊</a>
+    </div>
+</div>
+{% endblock %}

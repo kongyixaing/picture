@@ -1,0 +1,21 @@
+{% extends 'pic_base.html' %}
+{% block title %}邀请好友 - {{ group.name }}{% endblock %}
+{% block content %}
+<div class="admin-page">
+    <h1>邀请好友加入 {{ group.name }}</h1>
+    <div class="invite-list">
+        {% for friend in inviteable %}
+        <div class="invite-item">
+            <span>{{ friend.username }}</span>
+            <form method="POST" action="{{ url_for('pic_group_invite', gid=group.id) }}">
+                <input type="hidden" name="target_uid" value="{{ friend.uid }}">
+                <button type="submit" class="btn btn-small btn-primary">邀请</button>
+            </form>
+        </div>
+        {% else %}
+        <p class="empty">没有可邀请的好友</p>
+        {% endfor %}
+    </div>
+    <p><a href="{{ url_for('pic_group_chat', gid=group.id) }}" class="btn btn-secondary">返回群聊</a></p>
+</div>
+{% endblock %}

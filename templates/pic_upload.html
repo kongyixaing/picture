@@ -1,0 +1,34 @@
+{% extends 'pic_base.html' %}
+{% block title %}上传{% endblock %}
+{% block content %}
+<div class="upload-page">
+    <h1>上传图片/视频</h1>
+    {% if error %}
+        <div class="error">{{ error }}</div>
+    {% endif %}
+    <form method="POST" enctype="multipart/form-data" class="upload-form">
+        <div class="form-group">
+            <label>上传类型</label>
+            <select name="type">
+                <option value="image">图片</option>
+                <option value="video">视频</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>标题</label>
+            <input type="text" name="title" required maxlength="100">
+        </div>
+        <div class="form-group">
+            <label>描述</label>
+            <textarea name="description" rows="4" maxlength="500"></textarea>
+        </div>
+        <div class="form-group">
+            <label>选择文件</label>
+            <input type="file" name="file" required>
+            <p class="hint">支持格式: 图片(png, jpg, jpeg, gif, bmp, webp) / 视频(mp4, avi, mov, wmv, flv, mkv)</p>
+        </div>
+        <button type="submit" class="btn btn-primary">上传</button>
+        <p class="hint">上传后需要管理员审核才能展示</p>
+    </form>
+</div>
+{% endblock %}

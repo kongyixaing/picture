@@ -1,0 +1,19 @@
+{% extends 'pic_base.html' %}
+{% block title %}创建群聊{% endblock %}
+{% block content %}
+<div class="auth-page">
+    <div class="auth-box">
+        <h2>创建群聊</h2>
+        <form method="POST">
+            <div class="form-group">
+                <label>群名称</label>
+                <input type="text" name="name" required maxlength="50">
+            </div>
+            <button type="submit" class="btn btn-primary btn-block">创建</button>
+        </form>
+        <p class="auth-link">
+            <a href="{{ url_for('pic_groups') }}">返回群列表</a>
+        </p>
+    </div>
+</div>
+{% endblock %}

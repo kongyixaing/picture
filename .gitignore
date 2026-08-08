@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+
+# 数据目录
+data/
+backup/
+backups/
+logs/
+picture/
+land/
+user/
+grant_records/
+
+# 静态资源（上传的图片/视频）
+static/uploads/
+static/converted/
+
+# 安装器输出
+installer_output/
+
+# 运行时文件
+*.log
+run_log.txt
+reset_password.txt
+data/backup_token.txt
+data/crypto_key.key
+
+# 打包相关
+build/pic_app/
+
+# 配置文件（每个用户本地配置）
+config.json

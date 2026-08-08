@@ -1,0 +1,33 @@
+{% extends 'pic_base.html' %}
+{% block title %}封禁记录{% endblock %}
+{% block content %}
+<div class="admin-page">
+    <h1>封禁记录</h1>
+    <table class="user-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>时间</th>
+                <th>用户</th>
+                <th>原因</th>
+                <th>时长(分钟)</th>
+                <th>申请者</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for record in records %}
+            <tr>
+                <td>{{ record.ban_id }}</td>
+                <td>{{ record.time }}</td>
+                <td>{{ record.user }} ({{ record.uid }})</td>
+                <td>{{ record.reason }}</td>
+                <td>{{ record.duration_minutes }}</td>
+                <td>{{ record.applicant }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" class="empty">暂无封禁记录</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

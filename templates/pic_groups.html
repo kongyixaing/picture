@@ -1,0 +1,48 @@
+{% extends 'pic_base.html' %}
+{% block title %}群聊{% endblock %}
+{% block content %}
+<div class="groups-page">
+    <h1>我的群聊</h1>
+
+    {% if invitations %}
+    <div class="group-invitations">
+        <h2>群邀请</h2>
+        {% for inv in invitations %}
+        <div class="invitation-item">
+            <span>{{ inv.group_name }} - 邀请人: {{ inv.inviter_name }}</span>
+            <form method="POST" action="{{ url_for('pic_accept_group_invite', gid=inv.gid) }}">
+                <button type="submit" class="btn btn-small btn-success">接受</button>
+            </form>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="groups-actions">
+        <a href="{{ url_for('pic_create_group') }}" class="btn btn-primary">创建群聊</a>
+    </div>
+
+    <div class="groups-list">
+        {% for group in groups %}
+        <div class="group-card">
+            <div class="group-avatar">👥</div>
+            <div class="group-info">
+                <h3>{{ group.name }}</h3>
+                <p>群主: {{ group.creator_name }} | 成员: {{ group.members|length }}人</p>
+            </div>
+            <div class="group-actions">
+                <a href="{{ url_for('pic_group_chat', gid=group.id) }}" class="btn btn-small btn-primary">进入群聊</a>
+                {% if group.creator_uid == user.uid %}
+                    <a href="{{ url_for('pic_group_invite', gid=group.id) }}" class="btn btn-small btn-secondary">邀请</a>
+                    <form method="POST" action="{{ url_for('pic_delete_group', gid=group.id) }}" onsubmit="return confirm('确定删除群聊？')">
+                        <button type="submit" class="btn btn-small btn-danger">删群</button>
+                    </form>
+                {% endif %}
+            </div>
+        </div>
+        {% else %}
+        <p class="empty">暂无群聊</p>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

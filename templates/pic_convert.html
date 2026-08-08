@@ -1,0 +1,259 @@
+{% extends 'pic_base.html' %}
+{% block title %}视频转码 - H.264{% endblock %}
+{% block content %}
+<div class="convert-page">
+    <h1>视频转码工具</h1>
+    <p class="page-desc">将视频文件转换为 H.264 编码的 MP4 格式，确保浏览器兼容性</p>
+
+    {% if error %}
+        <div class="error">{{ error }}</div>
+    {% endif %}
+
+    {% if not ffmpeg_available %}
+        <div class="error">
+            <strong>FFmpeg 未检测到</strong><br>
+            视频转码功能当前不可用。请选择以下任一方式启用：
+            <ul style="margin-top: 8px; margin-bottom: 0;">
+                <li>运行命令：<code>pip install imageio-ffmpeg</code></li>
+                <li>或安装系统级 FFmpeg 并确保其在 PATH 中</li>
+            </ul>
+        </div>
+    {% endif %}
+
+    <div class="convert-form" {% if not ffmpeg_available %}style="opacity: 0.5; pointer-events: none;"{% endif %}>
+        <div class="form-group">
+            <label>选择视频文件</label>
+            <input type="file" id="videoFile" accept=".mp4,.avi,.mov,.wmv,.flv,.mkv">
+            <p class="hint">支持格式: mp4, avi, mov, wmv, flv, mkv (最大 100MB)</p>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label>画质 (CRF)</label>
+                <select id="crfSelect">
+                    <option value="18">极高 (18)</option>
+                    <option value="20">高 (20)</option>
+                    <option value="23" selected>中等 (23) - 推荐</option>
+                    <option value="26">一般 (26)</option>
+                    <option value="30">低 (30)</option>
+                </select>
+                <p class="hint">数值越小画质越好，文件越大</p>
+            </div>
+            <div class="form-group">
+                <label>编码速度</label>
+                <select id="presetSelect">
+                    <option value="ultrafast">超快</option>
+                    <option value="fast">快</option>
+                    <option value="medium" selected>中等 - 推荐</option>
+                    <option value="slow">慢</option>
+                    <option value="veryslow">极慢</option>
+                </select>
+                <p class="hint">速度越慢，压缩率越高</p>
+            </div>
+        </div>
+
+        <button id="convertBtn" class="btn btn-primary" onclick="startConvert()">开始转码</button>
+    </div>
+
+    <div id="videoInfo" class="video-info" style="display:none;">
+        <h3>视频信息</h3>
+        <div class="info-grid">
+            <div class="info-item">
+                <span class="info-label">当前编码:</span>
+                <span id="infoCodec" class="info-value">-</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">分辨率:</span>
+                <span id="infoResolution" class="info-value">-</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">时长:</span>
+                <span id="infoDuration" class="info-value">-</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">状态:</span>
+                <span id="infoStatus" class="info-value">-</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="progressSection" class="progress-section" style="display:none;">
+        <h3>转码进度</h3>
+        <div class="progress-bar-container">
+            <div id="progressBar" class="progress-bar">0%</div>
+        </div>
+        <p id="progressText" class="progress-text">正在准备...</p>
+    </div>
+
+    <div id="resultSection" class="result-section" style="display:none;">
+        <h3>转码完成</h3>
+        <a id="downloadLink" class="btn btn-success" download>下载 H.264 视频</a>
+        <button class="btn btn-secondary" onclick="resetForm()">重新转码</button>
+    </div>
+
+    <div id="errorSection" class="error-section" style="display:none;">
+        <h3>转码失败</h3>
+        <p id="errorText" class="error-text"></p>
+        <button class="btn btn-secondary" onclick="resetForm()">重试</button>
+    </div>
+</div>
+
+<script>
+let currentTaskId = null;
+let progressInterval = null;
+
+function startConvert() {
+    const fileInput = document.getElementById('videoFile');
+    const file = fileInput.files[0];
+
+    if (!file) {
+        alert('请选择视频文件');
+        return;
+    }
+
+    const btn = document.getElementById('convertBtn');
+    btn.disabled = true;
+    btn.textContent = '上传中...';
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('crf', document.getElementById('crfSelect').value);
+    formData.append('preset', document.getElementById('presetSelect').value);
+
+    fetch('{{ url_for("pic_convert_upload") }}', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (!data.success) {
+            throw new Error(data.error || '上传失败');
+        }
+
+        showVideoInfo(data.video_info, data.current_codec, data.already_h264);
+
+        if (data.already_h264) {
+            document.getElementById('infoStatus').textContent = '已是 H.264 编码';
+            document.getElementById('infoStatus').className = 'info-value status-ok';
+            showResult(data.download_url);
+            btn.disabled = false;
+            btn.textContent = '开始转码';
+        } else {
+            document.getElementById('infoStatus').textContent = '转码中...';
+            document.getElementById('infoStatus').className = 'info-value status-pending';
+            currentTaskId = data.task_id;
+            showProgress();
+            startProgressPolling();
+        }
+    })
+    .catch(error => {
+        alert('错误: ' + error.message);
+        btn.disabled = false;
+        btn.textContent = '开始转码';
+    });
+}
+
+function showVideoInfo(info, codec, isH264) {
+    const infoDiv = document.getElementById('videoInfo');
+    infoDiv.style.display = 'block';
+
+    document.getElementById('infoCodec').textContent = codec;
+    document.getElementById('infoResolution').textContent = (info.width || '?') + ' x ' + (info.height || '?');
+
+    const duration = info.duration;
+    if (duration && duration !== 'unknown') {
+        const sec = parseFloat(duration);
+        const mins = Math.floor(sec / 60);
+        const secs = Math.floor(sec % 60);
+        document.getElementById('infoDuration').textContent = mins + ':' + (secs < 10 ? '0' : '') + secs;
+    } else {
+        document.getElementById('infoDuration').textContent = '未知';
+    }
+}
+
+function showProgress() {
+    document.getElementById('progressSection').style.display = 'block';
+    document.getElementById('resultSection').style.display = 'none';
+    document.getElementById('errorSection').style.display = 'none';
+}
+
+function startProgressPolling() {
+    if (progressInterval) {
+        clearInterval(progressInterval);
+    }
+
+    progressInterval = setInterval(() => {
+        if (!currentTaskId) return;
+
+        fetch('{{ url_for("pic_convert_status", task_id="") }}' + currentTaskId)
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success) {
+                throw new Error(data.error || '获取状态失败');
+            }
+
+            const progressBar = document.getElementById('progressBar');
+            const progressText = document.getElementById('progressText');
+
+            progressBar.style.width = data.progress + '%';
+            progressBar.textContent = data.progress + '%';
+
+            if (data.status === 'processing') {
+                progressText.textContent = '正在转码，请稍候...';
+            } else if (data.status === 'completed') {
+                progressText.textContent = '转码完成!';
+                document.getElementById('infoStatus').textContent = '已完成';
+                document.getElementById('infoStatus').className = 'info-value status-ok';
+                showResult(data.download_url);
+                stopProgressPolling();
+            } else if (data.status === 'failed') {
+                progressText.textContent = '转码失败';
+                document.getElementById('infoStatus').textContent = '失败';
+                document.getElementById('infoStatus').className = 'info-value status-error';
+                showError(data.error || '未知错误');
+                stopProgressPolling();
+            }
+        })
+        .catch(error => {
+            console.error('Polling error:', error);
+        });
+    }, 1000);
+}
+
+function stopProgressPolling() {
+    if (progressInterval) {
+        clearInterval(progressInterval);
+        progressInterval = null;
+    }
+    const btn = document.getElementById('convertBtn');
+    btn.disabled = false;
+    btn.textContent = '开始转码';
+}
+
+function showResult(downloadUrl) {
+    document.getElementById('progressSection').style.display = 'none';
+    document.getElementById('resultSection').style.display = 'block';
+    document.getElementById('errorSection').style.display = 'none';
+    document.getElementById('downloadLink').href = downloadUrl;
+}
+
+function showError(errorMsg) {
+    document.getElementById('progressSection').style.display = 'none';
+    document.getElementById('resultSection').style.display = 'none';
+    document.getElementById('errorSection').style.display = 'block';
+    document.getElementById('errorText').textContent = errorMsg;
+}
+
+function resetForm() {
+    document.getElementById('videoFile').value = '';
+    document.getElementById('videoInfo').style.display = 'none';
+    document.getElementById('progressSection').style.display = 'none';
+    document.getElementById('resultSection').style.display = 'none';
+    document.getElementById('errorSection').style.display = 'none';
+    document.getElementById('progressBar').style.width = '0%';
+    document.getElementById('progressBar').textContent = '0%';
+    currentTaskId = null;
+    stopProgressPolling();
+}
+</script>
+{% endblock %}

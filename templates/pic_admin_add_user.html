@@ -1,0 +1,38 @@
+{% extends 'pic_base.html' %}
+{% block title %}添加用户{% endblock %}
+{% block content %}
+<div class="auth-page">
+    <div class="auth-box">
+        <h2>添加用户</h2>
+        {% if error %}
+            <div class="error">{{ error }}</div>
+        {% endif %}
+        <form method="POST">
+            <div class="form-group">
+                <label>用户名</label>
+                <input type="text" name="username" required minlength="3" maxlength="20">
+            </div>
+            <div class="form-group">
+                <label>密码</label>
+                <input type="password" name="password" required minlength="6">
+            </div>
+            <div class="form-group">
+                <label>邮箱 (可选)</label>
+                <input type="email" name="email">
+            </div>
+            <div class="form-group">
+                <label>用户等级</label>
+                <select name="role">
+                    <option value="user">普通用户</option>
+                    <option value="manager">管理员</option>
+                    <option value="admin">超级管理员</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary btn-block">创建用户</button>
+        </form>
+        <p class="auth-link">
+            <a href="{{ url_for('pic_admin_users') }}">返回用户列表</a>
+        </p>
+    </div>
+</div>
+{% endblock %}

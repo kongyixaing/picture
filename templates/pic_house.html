@@ -1,0 +1,103 @@
+{% extends 'pic_base.html' %}
+{% block title %}{{ land.house_name }} - 小镇房屋{% endblock %}
+{% block content %}
+<div class="house-page">
+    <div class="house-header">
+        <a href="{{ url_for('pic_world') }}" class="back-link">← 返回小镇</a>
+        <h1>🏠 {{ land.house_name }}</h1>
+        <p class="house-owner">
+            房主：<strong>{{ owner.username if owner else land.owner_name }}</strong>
+            &nbsp;|&nbsp; 地块编号 #{{ land.id }}
+            &nbsp;|&nbsp; 剩余租期：<strong class="{% if days_left <= 2 %}rent-warning{% endif %}">{{ days_left }} 天</strong>
+        </p>
+        {% if is_owner %}
+        <div class="house-actions">
+            {% if days_left <= 5 %}
+            <form method="POST" action="{{ url_for('pic_land_renew', land_id=land.id) }}">
+                <button type="submit" class="btn btn-warning"
+                        {% if user.points < rent_cost %}disabled{% endif %}>
+                    续租 7 天（消耗 {{ rent_cost }} 积分）
+                </button>
+                {% if user.points < rent_cost %}
+                <span class="points-note">积分不足（当前 {{ user.points }} 积分）</span>
+                {% endif %}
+            </form>
+            {% else %}
+            <span class="rent-ok">租期充足，无需续租</span>
+            {% endif %}
+            <a href="{{ url_for('pic_upload') }}" class="btn btn-primary">上传新作品</a>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="house-gallery">
+        <h2>🖼️ 作品展示墙</h2>
+        {% if pictures %}
+        <div class="picture-grid">
+            {% for pic in pictures %}
+            <div class="picture-card">
+                <a href="{{ url_for('pic_detail', pic_id=pic.id) }}">
+                    {% if pic.is_video %}
+                        <div class="video-thumbnail">
+                            <div class="video-placeholder">
+                                <span class="play-icon">▶</span>
+                            </div>
+                            <span class="video-badge">视频</span>
+                        </div>
+                    {% else %}
+                        <img src="{{ url_for('pic_uploaded_file', filename=pic.filename) }}" alt="{{ pic.title }}">
+                    {% endif %}
+                </a>
+                <div class="picture-info">
+                    <h3>{{ pic.title }}</h3>
+                    <div class="picture-stats">
+                        <span>⭐ {{ (pic.rating_sum / pic.rating_count)|round(1) if pic.rating_count > 0 else '暂无评分' }}</span>
+                        <span>💬 {{ pic.comment_count }}</span>
+                        <span>⬇️ {{ pic.download_count }}</span>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="empty">房屋里还没有展示的作品。{% if is_owner %}<a href="{{ url_for('pic_upload') }}">去上传第一幅作品</a>{% endif %}</p>
+        {% endif %}
+    </div>
+
+    {% if not is_owner and owner %}
+    <div class="visit-note">
+        👋 欢迎参观 {{ owner.username }} 的房屋，喜欢作品可以前往详情页评论评分支持作者！
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.house-page { max-width: 1100px; margin: 0 auto; padding: 10px; }
+.house-header { background: #f5efe0; border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 2px solid #d4c060; }
+.back-link { color: #666; text-decoration: none; font-size: 14px; }
+.back-link:hover { color: #333; }
+.house-header h1 { margin: 8px 0; color: #5a4a2a; }
+.house-owner { color: #555; font-size: 14px; }
+.rent-warning { color: #e74c3c; }
+.house-actions { margin-top: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.points-note { color: #e74c3c; font-size: 13px; }
+.rent-ok { color: #27ae60; font-size: 14px; }
+.btn { display: inline-block; padding: 6px 16px; border: none; border-radius: 6px; cursor: pointer; text-decoration: none; font-size: 14px; }
+.btn-primary { background: #4ECDC4; color: #143014; }
+.btn-warning { background: #FF9F1C; color: #143014; }
+.btn[disabled] { background: #ccc; color: #888; cursor: not-allowed; }
+.house-gallery h2 { color: #5a4a2a; margin-bottom: 12px; }
+.picture-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+.picture-card { background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+.picture-card img, .video-thumbnail { width: 100%; height: 180px; object-fit: cover; display: block; }
+.video-thumbnail { background: #2c3e50; position: relative; display: flex; align-items: center; justify-content: center; }
+.video-placeholder { text-align: center; }
+.play-icon { font-size: 40px; color: #fff; }
+.video-badge { position: absolute; top: 8px; right: 8px; background: #e74c3c; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
+.picture-info { padding: 10px; }
+.picture-info h3 { font-size: 14px; margin-bottom: 6px; }
+.picture-stats { display: flex; gap: 10px; font-size: 12px; color: #777; }
+.empty { color: #999; padding: 30px; text-align: center; background: #fff; border-radius: 8px; }
+.visit-note { background: #e8f5e9; padding: 12px 16px; border-radius: 8px; margin-top: 20px; color: #2e7d32; font-size: 14px; }
+</style>
+{% endblock %}

@@ -1,0 +1,70 @@
+{% extends 'pic_base.html' %}
+{% block title %}申请管理{% endblock %}
+{% block content %}
+<div class="admin-page">
+    <h1>用户申请管理</h1>
+
+    <h2>待处理申请</h2>
+    <table class="user-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>用户名</th>
+                <th>邮箱</th>
+                <th>IP</th>
+                <th>申请时间</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for app in applications %}
+            <tr>
+                <td>{{ app.id }}</td>
+                <td>{{ app.username }}</td>
+                <td>{{ app.email or '无' }}</td>
+                <td>{{ app.ip }}</td>
+                <td>{{ app.time_str }}</td>
+                <td class="table-actions">
+                    <form method="POST" action="{{ url_for('pic_admin_approve_application', aid=app.id) }}">
+                        <button type="submit" class="btn btn-small btn-success">通过</button>
+                    </form>
+                    <form method="POST" action="{{ url_for('pic_admin_reject_application', aid=app.id) }}">
+                        <button type="submit" class="btn btn-small btn-danger">拒绝</button>
+                    </form>
+                    <form method="POST" action="{{ url_for('pic_admin_block_ip') }}">
+                        <input type="hidden" name="ip" value="{{ app.ip }}">
+                        <button type="submit" class="btn btn-small btn-warning" onclick="return confirm('确定封禁该IP？')">封禁IP</button>
+                    </form>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" class="empty">暂无待处理申请</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h2 style="margin-top:30px">已封禁IP</h2>
+    <div class="blocked-ips">
+        {% if blocked_ips %}
+            {% for ip in blocked_ips %}
+            <div class="blocked-ip-item">
+                <span>{{ ip }}</span>
+                <form method="POST" action="{{ url_for('pic_admin_unblock_ip', ip=ip) }}">
+                    <button type="submit" class="btn btn-small btn-success">解除封禁</button>
+                </form>
+            </div>
+            {% endfor %}
+        {% else %}
+            <p class="empty">暂无封禁IP</p>
+        {% endif %}
+    </div>
+
+    <div class="block-ip-form" style="margin-top:20px">
+        <h3>手动封禁IP</h3>
+        <form method="POST" action="{{ url_for('pic_admin_block_ip') }}">
+            <input type="text" name="ip" placeholder="输入IP地址" required>
+            <button type="submit" class="btn btn-danger">封禁IP</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

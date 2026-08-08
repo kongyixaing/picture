@@ -1,0 +1,34 @@
+{% extends 'pic_base.html' %}
+{% block title %}申请账号{% endblock %}
+{% block content %}
+<div class="auth-page">
+    <div class="auth-box">
+        <h2>申请注册账号</h2>
+        {% if error %}
+            <div class="error">{{ error }}</div>
+        {% endif %}
+        {% if success %}
+            <div class="success">{{ success }}</div>
+        {% endif %}
+        <form method="POST">
+            <div class="form-group">
+                <label>用户名</label>
+                <input type="text" name="username" required minlength="3" maxlength="20">
+            </div>
+            <div class="form-group">
+                <label>邮箱 (可选)</label>
+                <input type="email" name="email">
+            </div>
+            <div class="form-group">
+                <label>密码</label>
+                <input type="password" name="password" required minlength="6">
+            </div>
+            <button type="submit" class="btn btn-primary btn-block">提交申请</button>
+        </form>
+        <p class="auth-link">
+            已有账号？<a href="{{ url_for('pic_login') }}">去登录</a>
+        </p>
+        <p class="auth-hint">同一IP申请间隔至少1分钟，申请后请等待管理员审核</p>
+    </div>
+</div>
+{% endblock %}

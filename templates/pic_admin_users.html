@@ -1,0 +1,67 @@
+{% extends 'pic_base.html' %}
+{% block title %}用户管理{% endblock %}
+{% block content %}
+<div class="admin-page">
+    <h1>用户管理</h1>
+    <div class="admin-actions">
+        <a href="{{ url_for('pic_admin_add_user') }}" class="btn btn-primary">添加用户</a>
+    </div>
+    <table class="user-table">
+        <thead>
+            <tr>
+                <th>UID</th>
+                <th>用户名</th>
+                <th>角色</th>
+                <th>状态</th>
+                <th>注册时间</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for u in users %}
+            <tr>
+                <td>{{ u.uid }}</td>
+                <td>{{ u.username }}</td>
+                <td><span class="role-badge role-{{ u.role }}">
+                    {% if u.role == 'admin' %}超级管理员
+                    {% elif u.role == 'manager' %}管理员
+                    {% else %}普通用户{% endif %}
+                </span></td>
+                <td>
+                    {% if u.status == 'banned' and u.ban_end_time > now() %}
+                        <span class="status-banned">封禁中</span>
+                    {% else %}
+                        <span class="status-active">正常</span>
+                    {% endif %}
+                </td>
+                <td>{{ u.created_at|int|datetimeformat }}</td>
+                <td class="table-actions">
+                    {% if user.role == 'admin' %}
+                    <form method="POST" action="{{ url_for('pic_admin_give_points', uid=u.uid) }}" style="display:inline"
+                          onsubmit="return confirm('确定给该用户发放 {{ form_points if form_points is defined else 0 }} 积分？')">
+                        <input type="number" name="points" value="5" min="1" max="10" style="width:60px" title="每次最多10积分">
+                        <input type="text" name="reason" placeholder="原因" style="width:80px">
+                        <button type="submit" class="btn btn-small btn-primary">发积分</button>
+                    </form>
+                    {% endif %}
+                    {% if u.status != 'banned' or u.ban_end_time <= now() %}
+                    <form method="POST" action="{{ url_for('pic_admin_ban', uid=u.uid) }}" onsubmit="return confirm('确定封禁？其所有评论将被删除')">
+                        <input type="number" name="minutes" placeholder="分钟" value="60" min="1" style="width:80px">
+                        <input type="text" name="reason" placeholder="原因" style="width:100px">
+                        <button type="submit" class="btn btn-small btn-danger">封禁</button>
+                    </form>
+                    {% else %}
+                    <form method="POST" action="{{ url_for('pic_admin_unban', uid=u.uid) }}">
+                        <button type="submit" class="btn btn-small btn-success">解封</button>
+                    </form>
+                    {% endif %}
+                    <form method="POST" action="{{ url_for('pic_admin_delete_user', uid=u.uid) }}" onsubmit="return confirm('确定删除用户？')">
+                        <button type="submit" class="btn btn-small btn-danger">删除</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

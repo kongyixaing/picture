@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>小镇地图</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #6b8e4e; overflow: hidden; }
+        #game-container { position: relative; width: 100vw; height: 100vh; }
+        #game-canvas { display: block; }
+        #ui-overlay { position: absolute; top: 10px; left: 10px; color: white; font-size: 14px; pointer-events: none; text-shadow: 1px 1px 2px #000; }
+        #online-count { color: #FFE66D; font-weight: bold; }
+        #nav-bar { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.5); padding: 8px; border-radius: 8px; z-index: 50; }
+        #nav-bar a { color: white; text-decoration: none; margin: 0 6px; padding: 4px 8px; background: rgba(255,255,255,0.15); border-radius: 4px; font-size: 13px; }
+        #nav-bar a:hover { background: rgba(255,255,255,0.3); }
+        .controls-hint { position: absolute; bottom: 10px; right: 10px; color: rgba(255,255,255,0.7); font-size: 12px; text-shadow: 1px 1px 2px #000; }
+        #plot-panel { position: absolute; left: 50%; bottom: 60px; transform: translateX(-50%); background: rgba(20,30,20,0.95); color: white; padding: 16px 20px; border-radius: 12px; min-width: 280px; max-width: 360px; display: none; z-index: 100; border: 2px solid #8FBC8F; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+        #plot-panel.show { display: block; }
+        #plot-panel h3 { margin-bottom: 6px; font-size: 16px; }
+        #plot-panel .plot-desc { font-size: 13px; color: #ccc; margin-bottom: 10px; }
+        #plot-panel .plot-info { font-size: 12px; color: #FFE66D; margin-bottom: 10px; }
+        #plot-panel button, #plot-panel input { padding: 6px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; margin: 2px; }
+        #plot-panel .btn-primary { background: #4ECDC4; color: #143014; font-weight: bold; }
+        #plot-panel .btn-warn { background: #FF9F1C; color: #143014; font-weight: bold; }
+        #plot-panel .btn-disabled { background: #555; color: #999; cursor: not-allowed; }
+        #plot-panel input[type=text] { background: #2a3a2a; color: white; border: 1px solid #555; width: 160px; }
+        #plot-panel form { display: inline; }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="game-canvas"></canvas>
+        <div id="ui-overlay">
+            <div>玩家: <span id="player-name">{{ user.username if user else '游客' }}</span> | 积分: <span id="player-points">{{ user.points if user else 0 }}</span></div>
+            <div>位置: X:<span id="pos-x">0</span> Y:<span id="pos-y">0</span> | <span id="online-count">在线: 1</span></div>
+            {% if my_land %}
+            <div style="margin-top:4px;color:#FFE66D;">我的地块 #{{ my_land.id }}{% if my_land.house_level %}（已建房）{% endif %}</div>
+            {% endif %}
+        </div>
+        <div id="nav-bar">
+            <a href="{{ url_for('pic_index') }}">首页</a>
+            <a href="{{ url_for('pic_world') }}">地图</a>
+            {% if user %}
+            <a href="{{ url_for('pic_my_house') }}">我的房屋</a>
+            <a href="{{ url_for('pic_profile') }}">个人中心</a>
+            <a href="{{ url_for('pic_logout') }}">退出</a>
+            {% else %}
+            <a href="{{ url_for('pic_login') }}">登录</a>
+            {% endif %}
+        </div>
+        <div id="plot-panel">
+            <h3 id="panel-title"></h3>
+            <div class="plot-desc" id="panel-desc"></div>
+            <div class="plot-info" id="panel-info"></div>
+            <div id="panel-actions"></div>
+        </div>
+        <div class="controls-hint">
+            WASD / 方向键 移动 &nbsp;|&nbsp; 站在地块上按 E 交互
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const plotPanel = document.getElementById('plot-panel');
+
+        const MAP_WIDTH = {{ map_width }};
+        const MAP_HEIGHT = {{ map_height }};
+        const PLAYER_SIZE = 32;
+        const MOVE_SPEED = 5;
+        const BUILD_COST = {{ build_cost }};
+        const MY_POINTS = {{ user.points if user else 0 }};
+        const LOGGED_IN = {{ 'true' if user else 'false' }};
+        const MY_LAND_ID = {{ my_land.id if my_land else 'null' }};
+
+        const LANDS = {{ lands | tojson }};
+
+        let player = {
+            x: {{ start_x }},
+            y: {{ start_y }},
+            color: '{{ player_color }}',
+            direction: 'down'
+        };
+
+        let camera = { x: 0, y: 0 };
+        let keys = {};
+        let currentPlot = null;
+        let otherPlayers = [];
+        let frameCount = 0;
+
+        let collisionMap = [];
+
+        function buildCollisionMap() {
+            collisionMap = [];
+            for (let land of LANDS) {
+                collisionMap.push({
+                    x: land.x, y: land.y,
+                    w: land.w, h: land.h,
+                    solid: land.type === 'functional' || land.type === 'reserved'
+                });
+            }
+        }
+
+        function findPlazaCenter() {
+            for (let land of LANDS) {
+                if (land.type === 'plaza') {
+                    return {
+                        x: land.x + land.w / 2,
+                        y: land.y + land.h / 2
+                    };
+                }
+            }
+            return { x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 };
+        }
+
+        function initPlayerPosition() {
+            const plaza = findPlazaCenter();
+            player.x = plaza.x;
+            player.y = plaza.y;
+        }
+
+        function isColliding(px, py) {
+            const half = PLAYER_SIZE * 0.4;
+            const corners = [
+                {x: px - half, y: py - half},
+                {x: px + half, y: py - half},
+                {x: px - half, y: py + half},
+                {x: px + half, y: py + half}
+            ];
+            for (let rect of collisionMap) {
+                for (let corner of corners) {
+                    if (corner.x >= rect.x && corner.x <= rect.x + rect.w &&
+                        corner.y >= rect.y && corner.y <= rect.y + rect.h) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        function centerCamera() {
+            camera.x = player.x - canvas.width / 2;
+            camera.y = player.y - canvas.height / 2;
+            camera.x = Math.max(0, Math.min(camera.x, MAP_WIDTH - canvas.width));
+            camera.y = Math.max(0, Math.min(camera.y, MAP_HEIGHT - canvas.height));
+        }
+
+        function drawGround() {
+            const startTileX = Math.floor(camera.x / 40);
+            const endTileX = Math.floor((camera.x + canvas.width) / 40) + 1;
+            const startTileY = Math.floor(camera.y / 40);
+            const endTileY = Math.floor((camera.y + canvas.height) / 40) + 1;
+
+            for (let ty = startTileY; ty <= endTileY; ty++) {
+                for (let tx = startTileX; tx <= endTileX; tx++) {
+                    const sx = tx * 40 - camera.x;
+                    const sy = ty * 40 - camera.y;
+                    let color = '#6b8e4e';
+                    const g = (tx * 7 + ty * 13) % 4;
+                    if (g === 0) color = '#74a055';
+                    else if (g === 1) color = '#688a47';
+                    else if (g === 2) color = '#7ba85f';
+                    ctx.fillStyle = color;
+                    ctx.fillRect(sx, sy, 40, 40);
+                }
+            }
+        }
+
+        function drawStreets() {
+            const CELL = 120;
+            const STREET_W = 40;
+            ctx.fillStyle = '#b5a98a';
+            for (let row = 0; row <= 15; row++) {
+                const sy = row * CELL - camera.y;
+                if (sy > -STREET_W && sy < canvas.height) {
+                    ctx.fillRect(-camera.x, sy, MAP_WIDTH, STREET_W);
+                }
+            }
+            for (let col = 0; col <= 19; col++) {
+                const sx = col * CELL - camera.x;
+                if (sx > -STREET_W && sx < canvas.width) {
+                    ctx.fillRect(sx, -camera.y, STREET_W, MAP_HEIGHT);
+                }
+            }
+            ctx.fillStyle = '#9a8a7a';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([15, 10]);
+            for (let row = 0; row <= 15; row++) {
+                const sy = row * CELL + STREET_W / 2 - camera.y;
+                if (sy > -5 && sy < canvas.height) {
+                    ctx.beginPath();
+                    ctx.moveTo(-camera.x, sy);
+                    ctx.lineTo(MAP_WIDTH - camera.x, sy);
+                    ctx.stroke();
+                }
+            }
+            for (let col = 0; col <= 19; col++) {
+                const sx = col * CELL + STREET_W / 2 - camera.x;
+                if (sx > -5 && sx < canvas.width) {
+                    ctx.beginPath();
+                    ctx.moveTo(sx, -camera.y);
+                    ctx.lineTo(sx, MAP_HEIGHT - camera.y);
+                    ctx.stroke();
+                }
+            }
+            ctx.setLineDash([]);
+        }
+
+        function drawPlaza() {
+            for (const land of LANDS) {
+                if (land.type !== 'plaza') continue;
+                const sx = land.x - camera.x;
+                const sy = land.y - camera.y;
+                if (sx + land.w < 0 || sx > canvas.width || sy + land.h < 0 || sy > canvas.height) continue;
+
+                ctx.fillStyle = '#d4c060';
+                ctx.fillRect(sx, sy, land.w, land.h);
+                ctx.fillStyle = '#c4b050';
+                ctx.fillRect(sx + 10, sy + 10, land.w - 20, land.h - 20);
+                ctx.fillStyle = '#b4a040';
+                ctx.beginPath();
+                ctx.arc(sx + land.w / 2, sy + land.h / 2, Math.min(land.w, land.h) / 4, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#d4c060';
+                ctx.font = 'bold 24px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('🏛️', sx + land.w / 2, sy + land.h / 2 + 10);
+                ctx.font = '14px Arial';
+                ctx.fillText('中心广场', sx + land.w / 2, sy + land.h / 2 + 35);
+            }
+        }
+
+        function drawLands() {
+            for (const land of LANDS) {
+                if (land.type === 'plaza') continue;
+                const sx = land.x - camera.x;
+                const sy = land.y - camera.y;
+                if (sx + land.w < 0 || sx > canvas.width || sy + land.h < 0 || sy > canvas.height) continue;
+
+                ctx.fillStyle = '#8a7a5a';
+                ctx.fillRect(sx, sy, land.w, land.h);
+
+                if (land.type === 'functional') {
+                    drawFunctionalBuilding(sx, sy, land.w, land.h, land.color, land.icon, land.name);
+                } else if (land.type === 'reserved') {
+                    drawReserved(sx, sy, land.w, land.h);
+                } else if (land.type === 'rentable') {
+                    const hasHouse = land.house_level >= 1;
+                    const roofColor = land.owner_name ? '#c66' : '#aa7';
+                    drawHouseContent(sx, sy, land.w, land.h, roofColor, hasHouse, land.price);
+                    if (land.owner_name) {
+                        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+                        ctx.fillRect(sx, sy + land.h + 2, land.w, 16);
+                        ctx.fillStyle = '#FFE66D';
+                        ctx.font = '10px Arial';
+                        ctx.textAlign = 'center';
+                        const label = hasHouse ? '🏠 ' + land.owner_name : '🔑 ' + land.owner_name;
+                        ctx.fillText(label, sx + land.w / 2, sy + land.h + 13);
+                    }
+                }
+            }
+        }
+
+        function drawFunctionalBuilding(sx, sy, w, h, color, icon, name) {
+            ctx.fillStyle = '#9a8a6a';
+            ctx.fillRect(sx - 5, sy - 5, w + 10, h + 10);
+            ctx.fillStyle = '#f0e4c8';
+            ctx.fillRect(sx, sy + h * 0.4, w, h * 0.55);
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.moveTo(sx - 7, sy + h * 0.45);
+            ctx.lineTo(sx + w / 2, sy - 7);
+            ctx.lineTo(sx + w + 7, sy + h * 0.45);
+            ctx.closePath();
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.fillStyle = '#4a2a0a';
+            ctx.fillRect(sx + w / 2 - 10, sy + h * 0.72, 20, h * 0.23);
+            ctx.fillStyle = '#3a2a0a';
+            ctx.beginPath();
+            ctx.arc(sx + w / 2, sy + h * 0.84, 2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#9dd5e8';
+            ctx.fillRect(sx + 8, sy + h * 0.5, 14, 14);
+            ctx.fillRect(sx + w - 22, sy + h * 0.5, 14, 14);
+            ctx.fillRect(sx + 8, sy + h * 0.72, 14, 14);
+            ctx.fillRect(sx + w - 22, sy + h * 0.72, 14, 14);
+            ctx.fillStyle = '#8dc4d8';
+            ctx.fillRect(sx + 11, sy + h * 0.53, 8, 8);
+            ctx.fillRect(sx + w - 19, sy + h * 0.53, 8, 8);
+            ctx.fillRect(sx + 11, sy + h * 0.75, 8, 8);
+            ctx.fillRect(sx + w - 19, sy + h * 0.75, 8, 8);
+            ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            ctx.fillRect(sx, sy + h + 4, w, 20);
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(icon + ' ' + name, sx + w / 2, sy + h + 17);
+        }
+
+        function drawReserved(sx, sy, w, h) {
+            ctx.fillStyle = '#9e9e8e';
+            ctx.fillRect(sx, sy, w, h);
+            ctx.strokeStyle = '#6a6a5a';
+            ctx.lineWidth = 3;
+            ctx.setLineDash([6, 4]);
+            ctx.strokeRect(sx + 4, sy + 4, w - 8, h - 8);
+            ctx.setLineDash([]);
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 20px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('🚧', sx + w / 2, sy + h / 2 + 8);
+            ctx.font = '9px Arial';
+            ctx.fillStyle = '#888';
+            ctx.fillText('预留', sx + w / 2, sy + h / 2 + 25);
+        }
+
+        function drawHouseContent(sx, sy, w, h, roofColor, hasHouse, price) {
+            ctx.strokeStyle = '#5a4a2a';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(sx, sy, w, h);
+            if (hasHouse) {
+                ctx.fillStyle = '#e8dcc0';
+                ctx.fillRect(sx + 6, sy + h * 0.45, w - 12, h * 0.5);
+                ctx.fillStyle = roofColor;
+                ctx.beginPath();
+                ctx.moveTo(sx, sy + h * 0.5);
+                ctx.lineTo(sx + w / 2, sy + 4);
+                ctx.lineTo(sx + w, sy + h * 0.5);
+                ctx.closePath();
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+                ctx.fillStyle = '#5a3a1a';
+                ctx.fillRect(sx + w / 2 - 8, sy + h * 0.68, 16, h * 0.27);
+                ctx.fillStyle = '#3a2a0a';
+                ctx.beginPath();
+                ctx.arc(sx + w / 2, sy + h * 0.82, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#9dd5e8';
+                ctx.fillRect(sx + 10, sy + h * 0.55, 12, 12);
+                ctx.fillRect(sx + w - 22, sy + h * 0.55, 12, 12);
+                ctx.fillStyle = '#8dc4d8';
+                ctx.fillRect(sx + 13, sy + h * 0.58, 6, 6);
+                ctx.fillRect(sx + w - 19, sy + h * 0.58, 6, 6);
+            } else {
+                ctx.strokeStyle = '#a08850';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(sx + 5, sy + 5, w - 10, h - 10);
+                for (let i = 0; i <= 3; i++) {
+                    const fx = sx + 8 + i * 16;
+                    ctx.fillStyle = '#6a4a2a';
+                    ctx.fillRect(fx, sy + h - 8, 3, 8);
+                }
+                ctx.fillStyle = '#d4c060';
+                ctx.fillRect(sx + w / 2 - 20, sy + h / 2 - 6, 40, 18);
+                ctx.fillStyle = '#5a4a20';
+                ctx.font = 'bold 11px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('待租', sx + w / 2, sy + h / 2 + 7);
+                if (price > 0) {
+                    ctx.fillStyle = '#FFE66D';
+                    ctx.font = '9px Arial';
+                    ctx.fillText(`${price}分/周`, sx + w / 2, sy + h / 2 + 20);
+                }
+            }
+        }
+
+        function drawPixelPlayer(p, color, size, isMe) {
+            const px = p.x - camera.x;
+            const py = p.y - camera.y;
+            const s = size;
+
+            if (isMe) {
+                ctx.fillStyle = '#FFD700';
+                ctx.beginPath();
+                ctx.arc(px, py - s * 0.55, 6, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.fillStyle = color;
+            ctx.fillRect(px - s * 0.22, py - s * 0.45, s * 0.44, s * 0.35);
+            ctx.fillRect(px - s * 0.15, py - s * 0.15, s * 0.3, s * 0.35);
+            ctx.fillRect(px - s * 0.12, py + s * 0.18, s * 0.24, s * 0.35);
+            ctx.fillRect(px - s * 0.32, py - s * 0.12, s * 0.12, s * 0.3);
+            ctx.fillRect(px + s * 0.2, py - s * 0.12, s * 0.12, s * 0.3);
+
+            ctx.fillStyle = '#222';
+            ctx.beginPath();
+            ctx.arc(px - s * 0.08, py - s * 0.38, 3, 0, Math.PI * 2);
+            ctx.arc(px + s * 0.08, py - s * 0.38, 3, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 11px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(isMe ? '我' : '', px, py - s * 0.6);
+        }
+
+        function updatePlayer() {
+            let dx = 0, dy = 0;
+            if (keys['KeyW'] || keys['ArrowUp']) dy -= MOVE_SPEED;
+            if (keys['KeyS'] || keys['ArrowDown']) dy += MOVE_SPEED;
+            if (keys['KeyA'] || keys['ArrowLeft']) dx -= MOVE_SPEED;
+            if (keys['KeyD'] || keys['ArrowRight']) dx += MOVE_SPEED;
+
+            if (dx !== 0 || dy !== 0) {
+                const len = Math.sqrt(dx * dx + dy * dy);
+                dx = (dx / len) * MOVE_SPEED;
+                dy = (dy / len) * MOVE_SPEED;
+
+                const nx = player.x + dx;
+                const ny = player.y + dy;
+
+                if (nx >= 0 && nx <= MAP_WIDTH && ny >= 0 && ny <= MAP_HEIGHT) {
+                    if (!isColliding(nx, ny)) {
+                        player.x = nx;
+                        player.y = ny;
+                        centerCamera();
+                        checkPlot();
+                    } else {
+                        if (!isColliding(nx, player.y)) {
+                            player.x = nx;
+                            centerCamera();
+                        } else if (!isColliding(player.x, ny)) {
+                            player.y = ny;
+                            centerCamera();
+                        }
+                    }
+                }
+            }
+        }
+
+        function checkPlot() {
+            let found = null;
+            for (const land of LANDS) {
+                if (player.x >= land.x && player.x <= land.x + land.w &&
+                    player.y >= land.y && player.y <= land.y + land.h) {
+                    found = land;
+                    break;
+                }
+            }
+            if (found !== currentPlot) {
+                currentPlot = found;
+                if (found) showPanel(found);
+                else hidePanel();
+            }
+        }
+
+        function showPanel(land) {
+            document.getElementById('panel-title').textContent = land.icon + ' ' + land.name + ' (#' + land.id + ')';
+            document.getElementById('panel-desc').textContent = land.desc;
+            const info = document.getElementById('panel-info');
+            const actions = document.getElementById('panel-actions');
+            info.textContent = '';
+            actions.innerHTML = '';
+
+            if (land.type === 'functional') {
+                actions.innerHTML = `<a href="${land.route}"><button class="btn-primary">进入 ${land.name}</button></a>`;
+            } else if (land.type === 'reserved') {
+                info.textContent = '此地块为预留用地，暂未开放。';
+            } else if (land.type === 'rentable') {
+                const price = land.price || 5;
+                if (!LOGGED_IN) {
+                    info.textContent = '请先登录后租地。';
+                    actions.innerHTML = `<a href="{{ url_for('pic_login') }}"><button class="btn-primary">登录</button></a>`;
+                } else if (land.is_vacant) {
+                    if (MY_LAND_ID) {
+                        info.textContent = '您已有一块地，无法再租。';
+                        actions.innerHTML = `<button class="btn-disabled" disabled>已租地块</button>`;
+                    } else if (MY_POINTS < price) {
+                        info.textContent = `租用需 ${price} 积分，您积分不足（当前 ${MY_POINTS}）。`;
+                        actions.innerHTML = `<button class="btn-disabled" disabled>积分不足</button>`;
+                    } else {
+                        info.textContent = `空地待租，需 ${price} 积分（${ {{ rent_period_days }} }天）。`;
+                        actions.innerHTML = `<form method="POST" action="/pic/land/${land.id}/rent"><button type="submit" class="btn-primary">租用 (${price} 积分)</button></form>`;
+                    }
+                } else if (land.owner_uid === '{{ user.uid if user else '' }}') {
+                    if (land.house_level >= 1) {
+                        info.textContent = '这是您的房屋。';
+                        actions.innerHTML = `<a href="/pic/house/${land.id}"><button class="btn-primary">进入我的房屋</button></a>`;
+                    } else {
+                        info.textContent = `您已租此地，建房需 ${BUILD_COST} 积分。`;
+                        if (MY_POINTS < BUILD_COST) {
+                            actions.innerHTML = `<button class="btn-disabled" disabled>积分不足建房</button>`;
+                        } else {
+                            actions.innerHTML = `<form method="POST" action="/pic/land/${land.id}/build"><input type="text" name="house_name" placeholder="房屋名称（可选）" maxlength="20"><button type="submit" class="btn-warn">建房 (${BUILD_COST} 积分)</button></form>`;
+                        }
+                    }
+                } else {
+                    if (land.house_level >= 1) {
+                        info.textContent = `${land.owner_name} 的房屋，欢迎参观。`;
+                        actions.innerHTML = `<a href="/pic/house/${land.id}"><button class="btn-primary">参观房屋</button></a>`;
+                    } else {
+                        info.textContent = `${land.owner_name} 已租此地，尚未建房。`;
+                    }
+                }
+            }
+            plotPanel.classList.add('show');
+        }
+
+        function hidePanel() {
+            plotPanel.classList.remove('show');
+        }
+
+        function updatePosition() {
+            document.getElementById('pos-x').textContent = Math.round(player.x);
+            document.getElementById('pos-y').textContent = Math.round(player.y);
+            fetch('/pic/api/world/position', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ x: player.x, y: player.y })
+            }).catch(() => {});
+        }
+
+        function fetchPlayers() {
+            fetch('/pic/api/world/players')
+                .then(res => res.json())
+                .then(data => {
+                    otherPlayers = data.players || [];
+                    document.getElementById('online-count').textContent = '在线: ' + (otherPlayers.length + 1);
+                })
+                .catch(() => {});
+        }
+
+        function gameLoop() {
+            frameCount++;
+            updatePlayer();
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawGround();
+            drawPlaza();
+            drawStreets();
+            drawLands();
+            for (const p of otherPlayers) drawPixelPlayer(p, p.color, PLAYER_SIZE * 0.85, false);
+            drawPixelPlayer(player, player.color, PLAYER_SIZE, true);
+            if (frameCount % 30 === 0) updatePosition();
+            if (frameCount % 60 === 0) fetchPlayers();
+            requestAnimationFrame(gameLoop);
+        }
+
+        window.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+            if (e.code === 'KeyE' && currentPlot) {
+                const btn = plotPanel.querySelector('button.btn-primary, button.btn-warn');
+                if (btn && !btn.disabled) btn.click();
+            }
+        });
+        window.addEventListener('keyup', (e) => { keys[e.code] = false; });
+
+        buildCollisionMap();
+        initPlayerPosition();
+        centerCamera();
+        gameLoop();
+        fetchPlayers();
+    </script>
+</body>
+</html>

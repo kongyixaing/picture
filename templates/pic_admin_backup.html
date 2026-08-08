@@ -1,0 +1,65 @@
+{% extends 'pic_base.html' %}
+{% block title %}数据备份{% endblock %}
+{% block content %}
+<div class="admin-page">
+    <h1>数据备份管理</h1>
+
+    <div class="backup-info">
+        <div class="info-card">
+            <h3>自动备份</h3>
+            <p>状态：<strong>已启用（每周一次）</strong></p>
+            {% if last_backup_time %}
+            <p>上次备份：<strong>{{ last_backup_time }}</strong></p>
+            {% else %}
+            <p>上次备份：<strong>暂无</strong></p>
+            {% endif %}
+            <form method="POST" action="{{ url_for('pic_admin_backup_create') }}" style="margin-top:10px">
+                <button type="submit" class="btn btn-primary" onclick="return confirm('确定立即备份吗？')">
+                    立即备份
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <h2 style="margin-top:30px">备份列表</h2>
+    {% if message %}
+    <div class="success-message">{{ message }}</div>
+    {% endif %}
+    {% if error %}
+    <div class="error">{{ error }}</div>
+    {% endif %}
+
+    {% if backups %}
+    <table class="user-table">
+        <thead>
+            <tr>
+                <th>文件名</th>
+                <th>备份时间</th>
+                <th>大小</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for bkp in backups %}
+            <tr>
+                <td>{{ bkp.filename }}</td>
+                <td>{{ bkp.time_str }}</td>
+                <td>{{ bkp.size_str }}</td>
+                <td class="table-actions">
+                    <form method="GET" action="{{ url_for('pic_admin_backup_download', filename=bkp.filename) }}" style="display:inline">
+                        <button type="submit" class="btn btn-small btn-primary">下载</button>
+                    </form>
+                    <form method="POST" action="{{ url_for('pic_admin_backup_delete', filename=bkp.filename) }}" style="display:inline"
+                          onsubmit="return confirm('确定删除该备份吗？')">
+                        <button type="submit" class="btn btn-small btn-danger">删除</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty">暂无备份文件</p>
+    {% endif %}
+</div>
+{% endblock %}

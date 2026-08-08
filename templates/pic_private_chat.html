@@ -1,0 +1,46 @@
+{% extends 'pic_base.html' %}
+{% block title %}私聊 - {{ other.username }}{% endblock %}
+{% block content %}
+<div class="chat-page">
+    <div class="chat-header">
+        <a href="{{ url_for('pic_friends') }}" class="back-link">← 返回</a>
+        <h2>{{ other.username }}</h2>
+    </div>
+    <div class="chat-messages" id="chat-messages">
+        {% for msg in messages %}
+            <div class="chat-message {% if msg.from_uid == user.uid %}mine{% else %}other{% endif %}">
+                <div class="msg-sender">{{ msg.from_name }}</div>
+                {% if msg.type == 'points_transfer' %}
+                <div class="msg-content msg-points">
+                    🧧 积分转账<br>
+                    <strong>{{ msg.points_amount }} 积分</strong>
+                    {% if msg.remark %}<br><small>备注: {{ msg.remark }}</small>{% endif %}
+                </div>
+                {% else %}
+                <div class="msg-content">{{ msg.content }}</div>
+                {% endif %}
+                <div class="msg-time">{{ msg.time_str }}</div>
+            </div>
+        {% else %}
+            <p class="empty">暂无消息，开始聊天吧</p>
+        {% endfor %}
+    </div>
+    <form method="POST" action="{{ url_for('pic_send_private_message', other_uid=other.uid) }}" class="chat-input-form">
+        <input type="text" name="content" placeholder="输入消息..." required autofocus>
+        <button type="submit" class="btn btn-primary">发送</button>
+    </form>
+    <div class="points-transfer-section">
+        <p class="points-info">💰 我的积分: <strong>{{ user.points if user.points is defined else 0 }}</strong></p>
+        <form method="POST" action="{{ url_for('pic_send_private_points', other_uid=other.uid) }}" class="points-form"
+              onsubmit="return confirm('确定向 {{ other.username }} 转账吗？')">
+            <input type="number" name="amount" placeholder="积分数量" min="1" required style="width:100px">
+            <input type="text" name="remark" placeholder="备注(可选)" style="width:120px">
+            <button type="submit" class="btn btn-warning">转账</button>
+        </form>
+    </div>
+</div>
+<script>
+    var chatDiv = document.getElementById('chat-messages');
+    chatDiv.scrollTop = chatDiv.scrollHeight;
+</script>
+{% endblock %}

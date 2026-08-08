@@ -1,0 +1,42 @@
+{% extends 'pic_base.html' %}
+{% block title %}审核管理{% endblock %}
+{% block content %}
+<div class="admin-page">
+    <h1>待审核内容</h1>
+    <div class="review-list">
+        {% for pic in pictures %}
+            <div class="review-item">
+                <div class="review-media">
+                    {% if pic.is_video %}
+                        <video controls width="200">
+                            <source src="{{ url_for('pic_uploaded_file', filename=pic.filename) }}">
+                        </video>
+                    {% else %}
+                        <img src="{{ url_for('pic_uploaded_file', filename=pic.filename) }}" alt="{{ pic.title }}">
+                    {% endif %}
+                </div>
+                <div class="review-info">
+                    <h3>{{ pic.title }}</h3>
+                    <p>类型: {% if pic.is_video %}视频{% else %}图片{% endif %}</p>
+                    <p>上传者: {{ pic.uploader_name }}</p>
+                    <p>描述: {{ pic.description or '无' }}</p>
+                </div>
+                <div class="review-actions">
+                    <form method="POST" action="{{ url_for('pic_admin_approve', pic_id=pic.id) }}" class="approve-form">
+                        <div class="form-row">
+                            <label>下载所需积分:</label>
+                            <input type="number" name="download_points" value="0" min="0" max="100" style="width:80px">
+                        </div>
+                        <button type="submit" class="btn btn-success">通过</button>
+                    </form>
+                    <form method="POST" action="{{ url_for('pic_admin_reject', pic_id=pic.id) }}" onsubmit="return confirm('确定拒绝？')">
+                        <button type="submit" class="btn btn-danger">拒绝</button>
+                    </form>
+                </div>
+            </div>
+        {% else %}
+            <p class="empty">暂无待审核内容</p>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

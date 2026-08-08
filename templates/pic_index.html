@@ -1,0 +1,44 @@
+{% extends 'pic_base.html' %}
+{% block title %}首页 - 图片分享{% endblock %}
+{% block content %}
+<div class="home-page">
+    <h1>图片分享</h1>
+    {% if not user %}
+        <p class="guest-note">您当前是游客，只能查看图片。<a href="{{ url_for('pic_login') }}">登录</a> 或 <a href="{{ url_for('pic_apply') }}">申请账号</a> 后可参与评论和互动。</p>
+    {% endif %}
+
+    <div class="picture-grid">
+        {% for pic in pictures %}
+            <div class="picture-card">
+                <a href="{{ url_for('pic_detail', pic_id=pic.id) }}">
+                    {% if pic.is_video %}
+                        <div class="video-thumbnail">
+                            <div class="video-placeholder">
+                                <span class="play-icon">▶</span>
+                            </div>
+                            <span class="video-badge">视频</span>
+                        </div>
+                    {% else %}
+                        <img src="{{ url_for('pic_uploaded_file', filename=pic.filename) }}" alt="{{ pic.title }}">
+                    {% endif %}
+                </a>
+                <div class="picture-info">
+                    <h3>{{ pic.title }}</h3>
+                    <p class="uploader">上传者: {{ pic.uploader_name }}</p>
+                    <div class="picture-stats">
+                        <span>⭐ {{ (pic.rating_sum / pic.rating_count) if pic.rating_count > 0 else '暂无评分' }}</span>
+                        <span>💬 {{ pic.comment_count }}</span>
+                    </div>
+                    {% if user and user.role == 'admin' %}
+                    <form method="POST" action="{{ url_for('pic_admin_delete_picture', pic_id=pic.id) }}" onsubmit="return confirm('确定删除该{{ '视频' if pic.is_video else '图片' }}吗？')" class="card-delete-form">
+                        <button type="submit" class="btn btn-small btn-danger">删除</button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+        {% else %}
+            <p class="empty">暂无图片</p>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,112 @@
+{% extends 'pic_base.html' %}
+{% block title %}{{ group.name }} - 群聊{% endblock %}
+{% block content %}
+<div class="chat-page">
+    <div class="chat-header">
+        <a href="{{ url_for('pic_groups') }}" class="back-link">← 返回</a>
+        <h2>{{ group.name }}</h2>
+        <span class="group-members">{{ group.members|length }}人</span>
+        {% if group.creator_uid == user.uid %}
+            <a href="{{ url_for('pic_group_invite', gid=group.id) }}" class="btn btn-small btn-secondary">邀请好友</a>
+        {% endif %}
+    </div>
+    <div class="chat-messages" id="chat-messages">
+        {% for msg in group.messages %}
+            <div class="chat-message {% if msg.sender_uid == user.uid %}mine{% else %}other{% endif %}">
+                <div class="msg-sender">{{ msg.sender_name }}</div>
+                {% if msg.type == 'red_packet' %}
+                <div class="msg-content msg-red-packet">
+                    🧧
+                    {% if msg.rp_type == 'single' %}
+                        <strong>专属红包</strong><br>
+                        <small>给 {{ msg.target_name }}</small><br>
+                    {% elif msg.rp_type == 'password' %}
+                        <strong>口令红包</strong><br>
+                        <small>{{ msg.remark or '点击输入口令领取' }}</small><br>
+                    {% else %}
+                        <strong>拼手气红包</strong><br>
+                        <small>{{ msg.remark or '恭喜发财，大吉大利' }}</small><br>
+                    {% endif %}
+                    <small>{{ msg.total_count }}个 / {{ msg.total_amount }}积分</small>
+                    <form method="POST" action="{{ url_for('pic_grab_red_packet', rpid=msg.rpid) }}" class="grab-form">
+                        {% if msg.rp_type == 'password' %}
+                        <input type="text" name="password" placeholder="输入口令" required style="width:100px">
+                        {% endif %}
+                        <button type="submit" class="btn btn-small btn-warning">抢</button>
+                    </form>
+                </div>
+                {% else %}
+                <div class="msg-content">{{ msg.content }}</div>
+                {% endif %}
+                <div class="msg-time">{{ msg.time_str }}</div>
+            </div>
+        {% else %}
+            <p class="empty">暂无消息，开始聊天吧</p>
+        {% endfor %}
+    </div>
+    <form method="POST" action="{{ url_for('pic_send_group_message', gid=group.id) }}" class="chat-input-form">
+        <input type="text" name="content" placeholder="输入消息..." required autofocus>
+        <button type="submit" class="btn btn-primary">发送</button>
+    </form>
+
+    <div class="red-packet-section">
+        <p class="points-info">💰 我的积分: <strong>{{ user.points if user.points is defined else 0 }}</strong></p>
+        <details class="rp-details">
+            <summary>🎁 发红包</summary>
+            <form method="POST" action="{{ url_for('pic_send_group_red_packet', gid=group.id) }}" class="rp-form">
+                <div class="rp-form-row">
+                    <label>类型:</label>
+                    <select name="rp_type" id="rp_type" onchange="toggleRpFields()">
+                        <option value="lucky">拼手气红包</option>
+                        <option value="single">专属红包</option>
+                        <option value="password">口令红包</option>
+                    </select>
+                </div>
+                <div class="rp-form-row">
+                    <label>总金额:</label>
+                    <input type="number" name="total_amount" min="1" value="10" required style="width:80px">
+                    <span>积分</span>
+                </div>
+                <div class="rp-form-row" id="count_row">
+                    <label>个数:</label>
+                    <input type="number" name="total_count" min="1" max="50" value="5" style="width:80px">
+                    <span>个</span>
+                </div>
+                <div class="rp-form-row" id="target_row" style="display:none">
+                    <label>发给:</label>
+                    <select name="target_uid" style="width:120px">
+                        {% for m in group.members %}
+                            {% if m.uid != user.uid %}
+                            <option value="{{ m.uid }}">{{ m.username }}</option>
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="rp-form-row" id="password_row" style="display:none">
+                    <label>口令:</label>
+                    <input type="text" name="password" placeholder="设置口令" style="width:100px">
+                </div>
+                <div class="rp-form-row">
+                    <label>备注:</label>
+                    <input type="text" name="remark" placeholder="备注(可选)" style="width:120px">
+                </div>
+                <button type="submit" class="btn btn-warning"
+                        onsubmit="return confirm('确定发红包吗？积分将从您的账户扣除。')">
+                    发红包
+                </button>
+            </form>
+        </details>
+    </div>
+</div>
+<script>
+    var chatDiv = document.getElementById('chat-messages');
+    chatDiv.scrollTop = chatDiv.scrollHeight;
+
+    function toggleRpFields() {
+        var type = document.getElementById('rp_type').value;
+        document.getElementById('count_row').style.display = (type === 'single') ? 'none' : '';
+        document.getElementById('target_row').style.display = (type === 'single') ? '' : 'none';
+        document.getElementById('password_row').style.display = (type === 'password') ? '' : 'none';
+    }
+</script>
+{% endblock %}

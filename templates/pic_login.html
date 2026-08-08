@@ -1,0 +1,26 @@
+{% extends 'pic_base.html' %}
+{% block title %}登录{% endblock %}
+{% block content %}
+<div class="auth-page">
+    <div class="auth-box">
+        <h2>登录</h2>
+        {% if error %}
+            <div class="error">{{ error }}</div>
+        {% endif %}
+        <form method="POST">
+            <div class="form-group">
+                <label>用户名/邮箱/手机号</label>
+                <input type="text" name="identifier" required>
+            </div>
+            <div class="form-group">
+                <label>密码</label>
+                <input type="password" name="password" required>
+            </div>
+            <button type="submit" class="btn btn-primary btn-block">登录</button>
+        </form>
+        <p class="auth-link">
+            还没有账号？<a href="{{ url_for('pic_apply') }}">申请注册</a>
+        </p>
+    </div>
+</div>
+{% endblock %}

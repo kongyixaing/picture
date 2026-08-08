@@ -1,0 +1,47 @@
+{% extends 'pic_base.html' %}
+{% block title %}好友{% endblock %}
+{% block content %}
+<div class="friends-page">
+    <h1>我的好友</h1>
+
+    {% if requests %}
+    <div class="friend-requests">
+        <h2>好友申请</h2>
+        {% for req in requests %}
+        <div class="request-item">
+            <span class="requester">{{ req.from_username }}</span>
+            <div class="request-actions">
+                <form method="POST" action="{{ url_for('pic_accept_friend', from_uid=req.from_uid) }}">
+                    <button type="submit" class="btn btn-small btn-success">接受</button>
+                </form>
+                <form method="POST" action="{{ url_for('pic_reject_friend', from_uid=req.from_uid) }}">
+                    <button type="submit" class="btn btn-small btn-danger">拒绝</button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="friends-list">
+        <h2>好友列表 ({{ friends|length }})</h2>
+        {% for friend in friends %}
+        <div class="friend-item">
+            <div class="friend-avatar">{{ friend.username[0]|upper }}</div>
+            <div class="friend-info">
+                <h3>{{ friend.username }}</h3>
+                <p>UID: {{ friend.uid }}</p>
+            </div>
+            <div class="friend-actions">
+                <a href="{{ url_for('pic_private_chat', other_uid=friend.uid) }}" class="btn btn-small btn-primary">发消息</a>
+                <form method="POST" action="{{ url_for('pic_remove_friend', friend_uid=friend.uid) }}" onsubmit="return confirm('确定删除好友？')">
+                    <button type="submit" class="btn btn-small btn-danger">删除</button>
+                </form>
+            </div>
+        </div>
+        {% else %}
+        <p class="empty">暂无好友，去 <a href="{{ url_for('pic_users') }}">用户列表</a> 添加好友吧</p>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}图片分享网站{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='pic_style.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="{{ url_for('pic_index') }}" class="nav-logo">图片分享</a>
+            <ul class="nav-menu">
+                <li><a href="{{ url_for('pic_index') }}">首页</a></li>
+                {% if map_enabled %}
+                    <li><a href="{{ url_for('pic_world') }}">🌍 世界地图</a></li>
+                {% endif %}
+                {% if user %}
+                    <li><a href="{{ url_for('pic_upload') }}">上传</a></li>
+                    <li><a href="{{ url_for('pic_convert') }}">转码</a></li>
+                    <li><a href="{{ url_for('pic_users') }}">用户</a></li>
+                    <li><a href="{{ url_for('pic_friends') }}">好友</a></li>
+                    <li><a href="{{ url_for('pic_groups') }}">群聊</a></li>
+                    {% if map_enabled %}
+                        <li><a href="{{ url_for('pic_my_house') }}">🏠 我的房屋</a></li>
+                    {% endif %}
+                    {% if user.role == 'admin' or user.role == 'manager' %}
+                        <li><a href="{{ url_for('pic_admin_review') }}">审核</a></li>
+                        <li><a href="{{ url_for('pic_ban_records') }}">封禁记录</a></li>
+                    {% endif %}
+                    {% if user.role == 'admin' %}
+                        <li><a href="{{ url_for('pic_admin_users') }}">用户管理</a></li>
+                        <li><a href="{{ url_for('pic_admin_applications') }}">申请管理</a></li>
+                        <li><a href="{{ url_for('pic_admin_backup') }}">数据备份</a></li>
+                    {% endif %}
+                    <li class="nav-user">
+                        <a href="{{ url_for('pic_profile') }}">{{ user.username }}</a>
+                        <span class="role-badge role-{{ user.role }}">
+                            {% if user.role == 'admin' %}超级管理员
+                            {% elif user.role == 'manager' %}管理员
+                            {% else %}普通用户{% endif %}
+                        </span>
+                    </li>
+                    <li><a href="{{ url_for('pic_logout') }}">退出</a></li>
+                {% else %}
+                    <li><a href="{{ url_for('pic_login') }}">登录</a></li>
+                    <li><a href="{{ url_for('pic_apply') }}">申请账号</a></li>
+                {% endif %}
+            </ul>
+        </div>
+    </nav>
+    <div class="container">
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+    </div>
+    <footer class="footer">
+        <p>&copy; 2026 图片分享网站</p>
+    </footer>
+</body>
+</html>
